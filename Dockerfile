@@ -1,5 +1,5 @@
-FROM maven:3.2-jdk-7-onbuild
-VOLUME /usr/src/app/etc
+FROM maven:3.8.5-amazoncorretto-8
+COPY . /usr/src/app
 WORKDIR /usr/src/app
 
 
