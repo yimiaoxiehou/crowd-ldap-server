@@ -89,7 +89,7 @@ public class CrowdLDAPServer {
    *
    * @param workDir the working directory.
    * @param confDir the configuration directory.	
-   * @param srvConfig server configuration as properties.
+   * @param serverConfig server configuration as properties.
    * @throws Exception if configuration loading or crowd client setup did not work.
    */
   public CrowdLDAPServer(File workDir, File confDir, Properties serverConfig) throws Exception {
@@ -302,6 +302,7 @@ public class CrowdLDAPServer {
    */
   public void startServer() throws Exception {
     server = new LdapServer();
+    server.setMaxSizeLimit(10000);
     int serverPort = Integer.parseInt(m_ServerConfig.getProperty(CONFIG_KEY_PORT,"10389"));
 
     Transport t = new TcpTransport(serverPort);

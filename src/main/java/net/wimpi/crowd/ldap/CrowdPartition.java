@@ -7,17 +7,16 @@ import com.atlassian.crowd.exception.OperationFailedException;
 import com.atlassian.crowd.exception.UserNotFoundException;
 import com.atlassian.crowd.model.group.Group;
 import com.atlassian.crowd.model.user.User;
-import com.atlassian.crowd.model.user.UserWithAttributes;
 import com.atlassian.crowd.search.query.entity.restriction.BooleanRestriction.BooleanLogic;
 import com.atlassian.crowd.search.query.entity.restriction.BooleanRestrictionImpl;
 import com.atlassian.crowd.search.query.entity.restriction.MatchMode;
-import com.atlassian.crowd.search.query.entity.restriction.NullRestrictionImpl;
 import com.atlassian.crowd.search.query.entity.restriction.TermRestriction;
 import com.atlassian.crowd.search.query.entity.restriction.constants.GroupTermKeys;
 import com.atlassian.crowd.search.query.entity.restriction.constants.UserTermKeys;
 import com.atlassian.crowd.service.client.CrowdClient;
 import com.google.common.collect.Lists;
-import java.util.stream.Collectors;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import net.wimpi.crowd.ldap.util.LRUCacheMap;
 import org.apache.directory.server.core.entry.ClonedServerEntry;
 import org.apache.directory.server.core.filtering.BaseEntryFilteringCursor;
@@ -56,19 +55,19 @@ public class CrowdPartition implements Partition {
   private static final Logger log = LoggerFactory.getLogger(CrowdPartition.class);
 
   private String m_ID;
-  private AtomicBoolean m_Initialized;
-  private LRUCacheMap<String, ServerEntry> m_EntryCache;
+  private static AtomicBoolean m_Initialized;
+  private static LRUCacheMap<String, ServerEntry> m_EntryCache;
 
   private SchemaManager m_SchemaManager;
   private String m_Suffix = CROWD_DN;
 
-  private ServerEntry m_CrowdEntry;
-  private ServerEntry m_CrowdGroupsEntry;
-  private ServerEntry m_CrowdUsersEntry;
+  private static ServerEntry m_CrowdEntry;
+  private static ServerEntry m_CrowdGroupsEntry;
+  private static ServerEntry m_CrowdUsersEntry;
 
-  private CrowdClient m_CrowdClient;
+  private static CrowdClient m_CrowdClient;
 
-  private List<ServerEntry> m_CrowdOneLevelList;
+  private static List<ServerEntry> m_CrowdOneLevelList;
   private Pattern m_UIDFilter = Pattern.compile("\\(0.9.2342.19200300.100.1.1=([^\\)]*)\\)");
   //AD memberOf Emulation
   private boolean m_emulateADmemberOf = false;
@@ -76,13 +75,13 @@ public class CrowdPartition implements Partition {
 
   public CrowdPartition(CrowdClient client) {
     m_CrowdClient = client;
-    m_EntryCache = new LRUCacheMap<String, ServerEntry>(300);
+    m_EntryCache = new LRUCacheMap<String, ServerEntry>(30000);
     m_Initialized = new AtomicBoolean(false);
   }//constructor
 
   public CrowdPartition(CrowdClient client, boolean emulateADMemberOf, boolean includeNested) {
     m_CrowdClient = client;
-    m_EntryCache = new LRUCacheMap<String, ServerEntry>(300);
+    m_EntryCache = new LRUCacheMap<String, ServerEntry>(30000);
     m_Initialized = new AtomicBoolean(false);
     m_emulateADmemberOf = emulateADMemberOf;
     m_includeNested = includeNested;
@@ -330,6 +329,7 @@ public class CrowdPartition implements Partition {
         userEntry.put(SchemaConstants.UID_AT,user);
         userEntry.put("mail", u.getEmailAddress());
         userEntry.put("givenname", u.getFirstName());
+        userEntry.put("fax", String.valueOf(u.isActive()));
         userEntry.put(SchemaConstants.SN_AT, u.getLastName());
         userEntry.put(SchemaConstants.OU_AT, "users");
 
@@ -505,7 +505,10 @@ public class CrowdPartition implements Partition {
                   Lists.newArrayList(new TermRestriction<>(UserTermKeys.ACTIVE, MatchMode.EXACTLY_MATCHES, true), new TermRestriction<>(UserTermKeys.USERNAME, MatchMode.CONTAINS, uid))
               );
           }
-          List<String> list = m_CrowdClient.searchUserNames(searchRestriction, 0, Integer.MAX_VALUE);
+          Instant start = Instant.now();
+          List<String> list =  m_CrowdClient.searchUserNames(searchRestriction, 0, Integer.MAX_VALUE);
+          log.info(String.format("Search name by uid(%s) from crowd speed %d ns. find %d users", uid, start.until(Instant.now(), ChronoUnit.MILLIS), list.size()));
+
           for (String gn : list) {
             DN udn = new DN(String.format("dn=%s,%s", gn, CROWD_USERS_DN));
             l.add(createUserEntry(udn));

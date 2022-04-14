@@ -2,6 +2,7 @@ package net.wimpi.crowd.ldap;
 
 import com.atlassian.crowd.model.user.User;
 import com.atlassian.crowd.service.client.CrowdClient;
+import java.nio.charset.StandardCharsets;
 import org.apache.directory.server.core.LdapPrincipal;
 import org.apache.directory.server.core.authn.AbstractAuthenticator;
 import org.apache.directory.server.core.interceptor.context.BindOperationContext;
@@ -31,8 +32,9 @@ public class CrowdAuthenticator extends AbstractAuthenticator {
   }//constructor
 
   public LdapPrincipal authenticate(BindOperationContext ctx) throws Exception {
+    log.debug("auth context is " + ctx);
     String user = ctx.getDn().getRdn(2).getNormValue();
-    String pass = new String(ctx.getCredentials(),"utf-8");
+    String pass = new String(ctx.getCredentials(), StandardCharsets.UTF_8);
 
     try {
       User u = m_CrowdClient.authenticateUser(user, pass);
